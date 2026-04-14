@@ -9,6 +9,8 @@ export const getRenderApiBaseUrl = () => {
   return '';
 };
 
+export const hasRenderApiBaseUrl = () => Boolean(getRenderApiBaseUrl());
+
 export const getRenderApiUrl = (path) => {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   const base = getRenderApiBaseUrl();

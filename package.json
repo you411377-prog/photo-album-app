@@ -13,6 +13,9 @@
     "check:prd-sync": "node scripts/check-prd-sync.mjs"
   },
   "dependencies": {
+    "@ffmpeg/core": "^0.12.6",
+    "@ffmpeg/ffmpeg": "^0.12.10",
+    "@ffmpeg/util": "^0.12.2",
     "@supabase/supabase-js": "^2.103.0",
     "express": "^5.1.0",
     "ffmpeg-static": "^5.2.0",

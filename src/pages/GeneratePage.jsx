@@ -7,7 +7,7 @@ import {
   saveMemoirProject,
   supabaseConfigMessage
 } from '../lib/supabase';
-import { getRenderApiUrl } from '../lib/renderApi';
+import { getRenderApiUrl, hasRenderApiBaseUrl } from '../lib/renderApi';
 import './GeneratePage.css';
 
 const drawRoundedRect = (ctx, x, y, w, h, r) => {
@@ -42,6 +42,18 @@ const chooseRecorderMimeType = () => {
   const supported = candidates.find(t => MediaRecorder.isTypeSupported?.(t));
   return supported || '';
 };
+
+const isLikelySafariFamily = () => {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const isAppleDevice = /iPhone|iPad|iPod|Macintosh/i.test(ua);
+  const isWebKit = /WebKit/i.test(ua);
+  const isOtherBrowserShell = /CriOS|Chrome|Chromium|EdgiOS|Edg|Firefox|FxiOS|OPiOS/i.test(ua);
+  return isAppleDevice && isWebKit && !isOtherBrowserShell;
+};
+
+const DEBUG_SERVER_URL = 'http://10.254.214.209:7777/event';
+const DEBUG_SESSION_ID = 'safari-empty-recording';
 
 const sleepFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
 
@@ -321,6 +333,9 @@ const GeneratePage = () => {
   const [shareNotice, setShareNotice] = useState('');
   const [savedMemoir, setSavedMemoir] = useState(null);
   const [savedSignature, setSavedSignature] = useState('');
+  const [browserHint, setBrowserHint] = useState('');
+  const hasRenderApi = hasRenderApiBaseUrl();
+  const isSafariFamily = isLikelySafariFamily();
 
   const derived = useMemo(() => {
     const dates = filteredMedia.map(m => m.date).filter(Boolean).sort();
@@ -386,6 +401,12 @@ const GeneratePage = () => {
   useEffect(() => {
     setOrderedMedia(filteredMedia);
   }, [filteredMedia]);
+
+  useEffect(() => {
+    if (isSafariFamily && resolution !== '720p') {
+      setResolution('720p');
+    }
+  }, [isSafariFamily, resolution]);
 
   useEffect(() => {
     return () => {
@@ -486,6 +507,7 @@ const GeneratePage = () => {
   };
 
   const checkServerHealth = useCallback(async () => {
+    if (!hasRenderApi) return false;
     try {
       const controller = new AbortController();
       const t = setTimeout(() => controller.abort(), 1200);
@@ -497,7 +519,7 @@ const GeneratePage = () => {
     } catch {
       return false;
     }
-  }, []);
+  }, [hasRenderApi]);
 
   const serverRender = useCallback(async () => {
     setServerError('');
@@ -506,6 +528,7 @@ const GeneratePage = () => {
     setGenerationError('');
     setSaveError('');
     setShareNotice('');
+    setBrowserHint('');
     setSavedMemoir(null);
     setSavedSignature('');
     setProgress(0);
@@ -519,7 +542,7 @@ const GeneratePage = () => {
 
     try {
       if (!serverConfirmRef.current) {
-        const ok = window.confirm('将把你选择的素材上传到同一 Wi‑Fi 的电脑进行合成，仅用于本次生成。是否继续？');
+        const ok = window.confirm('将把你选择的素材上传到已配置的辅助渲染服务进行合成，仅用于本次生成。是否继续？');
         if (!ok) {
           setIsGenerating(false);
           setServerGenerating(false);
@@ -613,6 +636,7 @@ const GeneratePage = () => {
     setBgmHint('');
     setSaveError('');
     setShareNotice('');
+    setBrowserHint('');
     setSavedMemoir(null);
     setSavedSignature('');
     setProgress(0);
@@ -624,8 +648,11 @@ const GeneratePage = () => {
     setVideoMime('');
 
     const mimeType = chooseRecorderMimeType();
+    // #region debug-point A:mime-selection
+    fetch(DEBUG_SERVER_URL, { method: 'POST', body: JSON.stringify({ sessionId: DEBUG_SESSION_ID, runId: 'pre-fix', hypothesisId: 'A', location: 'GeneratePage.jsx:mime-selection', msg: '[DEBUG] recorder mime selected', data: { ua: typeof navigator !== 'undefined' ? navigator.userAgent : '', mimeType, mediaRecorderDefined: typeof MediaRecorder !== 'undefined', orderedMediaCount: orderedMedia.length, resolution, isSafariFamily }, ts: Date.now() }) }).catch(() => {});
+    // #endregion
     if (!mimeType) {
-      setGenerationError('当前浏览器不支持视频生成（MediaRecorder 不可用）。可先使用“导入素材 + 生成流程”体验，或用 Android Chrome / 桌面 Chrome 试试。');
+      setGenerationError('当前浏览器不支持本地视频生成（MediaRecorder 不可用）。请优先使用系统浏览器中的 Safari / Chrome，或改用桌面端继续生成。');
       setIsGenerating(false);
       return;
     }
@@ -642,6 +669,9 @@ const GeneratePage = () => {
     }
 
     const stream = canvas.captureStream(30);
+    // #region debug-point B:stream-state
+    fetch(DEBUG_SERVER_URL, { method: 'POST', body: JSON.stringify({ sessionId: DEBUG_SESSION_ID, runId: 'pre-fix', hypothesisId: 'B', location: 'GeneratePage.jsx:stream-state', msg: '[DEBUG] captureStream created', data: { videoTrackCount: stream.getVideoTracks().length, audioTrackCount: stream.getAudioTracks().length, videoTrackReadyState: stream.getVideoTracks()[0]?.readyState || '', videoTrackMuted: stream.getVideoTracks()[0]?.muted ?? null }, ts: Date.now() }) }).catch(() => {});
+    // #endregion
     const recorder = new MediaRecorder(stream, { mimeType });
     const chunks = [];
     let started = false;
@@ -684,13 +714,25 @@ const GeneratePage = () => {
 
       recorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) chunks.push(e.data);
+        // #region debug-point C:dataavailable
+        fetch(DEBUG_SERVER_URL, { method: 'POST', body: JSON.stringify({ sessionId: DEBUG_SESSION_ID, runId: 'pre-fix', hypothesisId: 'C', location: 'GeneratePage.jsx:ondataavailable', msg: '[DEBUG] recorder dataavailable fired', data: { size: e.data?.size ?? 0, type: e.data?.type || '', chunksLength: chunks.length + ((e.data && e.data.size > 0) ? 0 : 0) }, ts: Date.now() }) }).catch(() => {});
+        // #endregion
       };
 
       const stopped = new Promise(resolve => {
         recorder.onstop = () => resolve();
       });
 
-      recorder.start(250);
+      // Safari on iPhone often produces empty blobs with short timeslices on canvas capture.
+      // Starting without a timeslice and forcing a final requestData() is more reliable.
+      if (isSafariFamily) {
+        recorder.start();
+      } else {
+        recorder.start(250);
+      }
+      // #region debug-point D:recorder-start
+      fetch(DEBUG_SERVER_URL, { method: 'POST', body: JSON.stringify({ sessionId: DEBUG_SESSION_ID, runId: 'pre-fix', hypothesisId: 'D', location: 'GeneratePage.jsx:recorder-start', msg: '[DEBUG] recorder started', data: { state: recorder.state, mimeType: recorder.mimeType || mimeType, usedTimeslice: isSafariFamily ? 0 : 250 }, ts: Date.now() }) }).catch(() => {});
+      // #endregion
       started = true;
 
       const photos = orderedMedia.filter(m => m.type === 'photo' && typeof m.url === 'string');
@@ -764,6 +806,16 @@ const GeneratePage = () => {
         }
       }
 
+      if (isSafariFamily && recorder.state !== 'inactive') {
+        await new Promise(resolve => setTimeout(resolve, 180));
+        try {
+          recorder.requestData();
+        } catch {
+          void 0;
+        }
+        await new Promise(resolve => setTimeout(resolve, 120));
+      }
+
       recorder.stop();
       await stopped;
       if (stopBgm) stopBgm();
@@ -776,8 +828,13 @@ const GeneratePage = () => {
       }
 
       const blob = new Blob(chunks, { type: mimeType });
+      // #region debug-point E:blob-result
+      fetch(DEBUG_SERVER_URL, { method: 'POST', body: JSON.stringify({ sessionId: DEBUG_SESSION_ID, runId: 'pre-fix', hypothesisId: 'E', location: 'GeneratePage.jsx:blob-result', msg: '[DEBUG] recorder blob finalized', data: { blobSize: blob.size, blobType: blob.type, chunkCount: chunks.length, recorderState: recorder.state }, ts: Date.now() }) }).catch(() => {});
+      // #endregion
       if (blob.size === 0) {
-        setGenerationError('视频生成失败：录制输出为空。建议换用 Android Chrome / 桌面 Chrome，或稍后使用 App 版能力。');
+        setGenerationError(isSafariFamily
+          ? '视频生成失败：Safari 没有返回可用视频数据。建议先关闭低电量模式、只选少量照片重试；如果仍失败，请改用桌面端生成后在手机查看结果。'
+          : '视频生成失败：录制输出为空。建议换用系统浏览器中的 Safari / Chrome，或改用桌面端继续生成。');
         setIsGenerating(false);
         return;
       }
@@ -805,32 +862,33 @@ const GeneratePage = () => {
           void 0;
         }
       }
-      setGenerationError('视频生成中断：当前浏览器可能不支持该编码/录制方式。建议换用 Android Chrome 或桌面 Chrome。');
+      setGenerationError('视频生成中断：当前浏览器可能不支持该编码/录制方式。建议换用系统浏览器中的 Safari / Chrome，或改用桌面端继续生成。');
       setIsGenerating(false);
     }
-  }, [orderedMedia, resolution, textBundle, bgmEnabled, bgmVolume, bgmPreset, selectedStyle?.id, textTone]);
+  }, [orderedMedia, resolution, textBundle, bgmEnabled, bgmVolume, bgmPreset, selectedStyle?.id, textTone, isSafariFamily]);
 
   const isWeChat = useMemo(() => /MicroMessenger/i.test(navigator.userAgent), []);
 
   useEffect(() => {
-    if (!isWeChat) return;
+    if (!isWeChat || !hasRenderApi) return;
     checkServerHealth()
       .then(ok => setServerReachable(ok))
       .catch(() => setServerReachable(false));
-  }, [isWeChat, checkServerHealth]);
+  }, [isWeChat, hasRenderApi, checkServerHealth]);
 
   useEffect(() => {
     if (isWeChat) {
-      setGenerationError('微信内置浏览器通常无法稳定本地生成视频。推荐使用“服务端生成”。');
+      setGenerationError('微信内置浏览器通常无法稳定本地生成视频。建议点击右上角用系统浏览器打开后再生成。');
+      setBrowserHint('推荐在手机系统浏览器中打开本页：iPhone 用 Safari，Android 用 Chrome。线上版本以本地生成 + 云端保存分享为主。');
       setIsGenerating(false);
-      if (serverReachable && !autoServerTriedRef.current) {
+      if (hasRenderApi && serverReachable && !autoServerTriedRef.current) {
         autoServerTriedRef.current = true;
         serverRender();
       }
       return;
     }
     generateVideo();
-  }, [isWeChat, serverReachable, serverRender, generateVideo]);
+  }, [isWeChat, hasRenderApi, serverReachable, serverRender, generateVideo]);
 
   const handleBack = () => {
     navigate('/style');
@@ -885,15 +943,20 @@ const GeneratePage = () => {
               ) : (
                 <div className="preview-placeholder">
                   <p>无法生成视频</p>
-                  <p className="preview-info">{generationError || '微信内置浏览器可能不支持本地录制。可尝试“服务端生成”。'}</p>
-                  {isWeChat && !serverReachable && (
+                  <p className="preview-info">{generationError || '当前浏览器可能不支持本地录制，请优先使用系统浏览器中的 Safari / Chrome。'}</p>
+                  {browserHint && (
+                    <div className="server-error">{browserHint}</div>
+                  )}
+                  {isWeChat && hasRenderApi && !serverReachable && (
                     <div className="server-error">
-                      未检测到电脑端生成服务。请在电脑执行 npm run server，然后确保手机和电脑同一 Wi‑Fi，再回到此页重试。
+                      当前没有可用的辅助渲染服务。如果你仍想用电脑帮手机合成，可在本地启动 server 并把辅助渲染地址配进前端环境变量。
                     </div>
                   )}
-                  <button className="server-generate" onClick={serverRender} disabled={serverGenerating}>
-                    {serverGenerating ? '服务端生成中…' : '服务端生成（微信推荐）'}
-                  </button>
+                  {hasRenderApi && (
+                    <button className="server-generate" onClick={serverRender} disabled={serverGenerating}>
+                      {serverGenerating ? '辅助渲染中…' : '使用辅助渲染'}
+                    </button>
+                  )}
                   {serverError && <div className="server-error">{serverError}</div>}
                 </div>
               )}
