@@ -865,3 +865,29 @@
     grid-template-columns: 1fr;
   }
 }
+
+.import-count {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: #667eea;
+  font-weight: 500;
+}
+
+.import-hint {
+  margin-top: 12px;
+  padding: 16px;
+  background: #f0f4ff;
+  border-radius: 8px;
+}
+
+.import-hint p {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.import-hint p:last-child {
+  margin-bottom: 0;
+  color: #999;
+  font-size: 0.8rem;
+}

@@ -1,4 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
+let createClient = null;
+try {
+  const mod = await import('@supabase/supabase-js');
+  createClient = mod.createClient;
+} catch {
+  // @supabase/supabase-js not installed — cloud features disabled
+}
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -6,11 +12,11 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const SUPABASE_BUCKET = import.meta.env.VITE_SUPABASE_BUCKET || 'memoirs';
 export const SUPABASE_TABLE = import.meta.env.VITE_SUPABASE_TABLE || 'memoir_projects';
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+export const isSupabaseConfigured = Boolean(createClient && supabaseUrl && supabaseAnonKey);
 
 export const supabaseConfigMessage = isSupabaseConfigured
   ? ''
-  : '请先在 .env.local 中配置 VITE_SUPABASE_URL 和 VITE_SUPABASE_ANON_KEY。';
+  : '云端保存未配置（可选功能，不影响本地使用）。';
 
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
