@@ -4,10 +4,10 @@
  */
 
 const BGM_FILES = {
-  warm: ['/bgm/warm_1.mp3', '/bgm/warm_2.mp3'],
-  couple: ['/bgm/couple_1.mp3', '/bgm/couple_2.mp3'],
-  travel: ['/bgm/travel_1.mp3', '/bgm/travel_2.mp3'],
-  vintage: ['/bgm/vintage_1.mp3', '/bgm/vintage_2.mp3'],
+  warm: ['/bgm/warm_1.mp3'],
+  couple: ['/bgm/couple_1.mp3'],
+  travel: ['/bgm/warm_1.mp3'],
+  vintage: ['/bgm/vintage_1.mp3'],
 };
 
 const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -52,14 +52,17 @@ export const createBgm = ({ audioCtx, destination, durationSec, volume, preset }
     .then(buf => audioCtx.decodeAudioData(buf))
     .then(audioBuffer => {
       if (stopped) return;
-      // Kill synth fallback
-      synthNodes.stop();
-      // Play real audio
+      // Align switch timing to avoid pop on late mp3 load
+      const switchAt = Math.max(startAt, audioCtx.currentTime + 0.03);
+      // Fade synth out before stopping
+      try { synthNodes.mix?.gain.linearRampToValueAtTime(0, switchAt); } catch { /* noop */ }
+      synthNodes.stop(switchAt);
+      // Play real audio aligned with synth stop
       sourceNode = audioCtx.createBufferSource();
       sourceNode.buffer = audioBuffer;
       sourceNode.loop = true;
       sourceNode.connect(gain);
-      sourceNode.start(startAt);
+      sourceNode.start(switchAt, (switchAt - startAt) % audioBuffer.duration);
       sourceNode.stop(endAt);
     })
     .catch(() => {
@@ -113,8 +116,9 @@ function startSynthFallback(audioCtx, destinationGain, startAt, endAt, preset) {
   osc2.stop(endAt);
 
   return {
-    stop: () => {
-      try { osc1.stop(); osc2.stop(); } catch { /* noop */ }
+    mix,
+    stop: (at) => {
+      try { osc1.stop(at || 0); osc2.stop(at || 0); } catch { /* noop */ }
       try { mix.disconnect(); filter.disconnect(); } catch { /* noop */ }
     }
   };

@@ -891,3 +891,46 @@
   color: #999;
   font-size: 0.8rem;
 }
+
+/* Location input */
+.location-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.location-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: #fff;
+}
+
+.location-input:focus {
+  outline: none;
+  border-color: #007aff;
+}
+
+.location-apply-button {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  background: #007aff;
+  color: #fff;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.location-apply-button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.location-hint {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: #999;
+}

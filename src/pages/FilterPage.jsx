@@ -36,6 +36,7 @@ const FilterPage = () => {
   const [personUploadKey, setPersonUploadKey] = useState(0);
   const [targetPersonPhoto, setTargetPersonPhoto] = useState({ previewUrl: '', fileName: '' });
   const [personRecognition, setPersonRecognition] = useState({ status: 'idle', personId: null, confidence: null });
+  const [customLocation, setCustomLocation] = useState('');
 
   useEffect(() => {
     return () => { if (targetPersonPhoto.previewUrl) URL.revokeObjectURL(targetPersonPhoto.previewUrl); };
@@ -155,6 +156,16 @@ const FilterPage = () => {
   const handleSelectAllManual = () => { const ids = manualVisibleMediaSorted.map(m => m.id); setManualSelectedIds(prev => { const s = new Set(prev); ids.forEach(id => s.add(id)); return Array.from(s); }); };
   const handleClearManual = () => setManualSelectedIds([]);
   const handleToggleFavorite = (mediaId) => setImportedMedia(prev => prev.map(m => (m.id === mediaId ? { ...m, favorite: !m.favorite } : m)));
+  const handleApplyLocation = () => {
+    if (!customLocation.trim()) return;
+    const loc = customLocation.trim();
+    setImportedMedia(prev => prev.map(m => {
+      if (selectionMode === 'manual') {
+        return manualSelectedIds.includes(m.id) ? { ...m, location: loc } : m;
+      }
+      return selectedMedia.some(s => s.id === m.id) ? { ...m, location: loc } : m;
+    }));
+  };
   const handleNext = () => { commitFilter(selectedMedia); navigate('/review'); };
   const handleBack = () => navigate('/home');
 
@@ -352,6 +363,15 @@ const FilterPage = () => {
               {selectedMedia.length > 4 && <div className="media-more">+{selectedMedia.length - 4}</div>}
             </div>
           </div>
+        </section>
+
+        <section className="filter-section">
+          <h2>地点（可选）</h2>
+          <div className="location-input-row">
+            <input className="location-input" value={customLocation} onChange={(e) => setCustomLocation(e.target.value)} placeholder="输入地点名称，如：北京、杭州西湖" />
+            <button className="location-apply-button" onClick={handleApplyLocation} disabled={!customLocation.trim()}>应用</button>
+          </div>
+          <p className="location-hint">为当前筛选结果中的素材统一设置地点，将显示在视频中</p>
         </section>
 
         <button className={`next-button ${selectedMedia.length === 0 ? 'disabled' : ''}`} onClick={handleNext} disabled={selectedMedia.length === 0}>下一步</button>
