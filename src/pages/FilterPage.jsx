@@ -1,75 +1,29 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProject } from '../context/ProjectContext';
-import { mockPeople, mockMediaData, filterMedia } from '../data/mockData';
+import { filterMedia } from '../data/mockData';
 import { parseExifFromImageFile } from '../lib/exifParser';
-import { computeFingerprint } from '../lib/dedup';
 import { formatYmd, formatHm, formatSeconds } from '../lib/dateUtils';
 import './FilterPage.css';
-
-const mapFingerprintToPerson = (fingerprint, people) => {
-  const safeLen = Math.max(people.length, 1);
-  const index = fingerprint % safeLen;
-  const confidence = (0.78 + (fingerprint % 15) / 100).toFixed(2);
-  return { personId: people[index]?.id ?? null, confidence };
-};
 
 const FilterPage = () => {
   const navigate = useNavigate();
   const { importedMedia, setImportedMedia, commitFilter } = useProject();
 
-  const [selectionMode, setSelectionMode] = useState('filter');
+  const [selectionMode, setSelectionMode] = useState('manual');
   const [enableTime, setEnableTime] = useState(true);
   const [timeRange, setTimeRange] = useState('month');
   const [customDate, setCustomDate] = useState({ start: '', end: '' });
-  const [selectedPeople, setSelectedPeople] = useState([]);
   const [enableFormat, setEnableFormat] = useState(true);
   const [formatOptions, setFormatOptions] = useState({
     includePhotos: true, includeVideos: true, includeLivePhoto: true, includeScreenshots: false
   });
   const [manualImportKey, setManualImportKey] = useState(0);
   const [manualSelectedIds, setManualSelectedIds] = useState([]);
-  const [manualTab, setManualTab] = useState('recent');
-  const [manualAlbum, setManualAlbum] = useState('');
-  const [manualSearch, setManualSearch] = useState('');
   const [manualDate, setManualDate] = useState('');
-  const [personUploadKey, setPersonUploadKey] = useState(0);
-  const [targetPersonPhoto, setTargetPersonPhoto] = useState({ previewUrl: '', fileName: '' });
-  const [personRecognition, setPersonRecognition] = useState({ status: 'idle', personId: null, confidence: null });
   const [customLocation, setCustomLocation] = useState('');
-
-  useEffect(() => {
-    return () => { if (targetPersonPhoto.previewUrl) URL.revokeObjectURL(targetPersonPhoto.previewUrl); };
-  }, [targetPersonPhoto.previewUrl]);
-
-  const ensurePersonSelected = (personId) => {
-    if (!personId) return;
-    setSelectedPeople(prev => (prev.includes(personId) ? prev : [...prev, personId]));
-  };
-
-  const handleTargetPersonPhotoChange = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (targetPersonPhoto.previewUrl) URL.revokeObjectURL(targetPersonPhoto.previewUrl);
-    const previewUrl = URL.createObjectURL(file);
-    setTargetPersonPhoto({ previewUrl, fileName: file.name });
-    setPersonRecognition({ status: 'processing', personId: null, confidence: null });
-    try {
-      const fingerprint = await computeFingerprint(file);
-      const mapped = mapFingerprintToPerson(fingerprint, mockPeople);
-      setPersonRecognition({ status: 'done', personId: mapped.personId, confidence: mapped.confidence });
-      ensurePersonSelected(mapped.personId);
-    } catch {
-      setPersonRecognition({ status: 'error', personId: null, confidence: null });
-    }
-  };
-
-  const handleClearTargetPerson = () => {
-    if (targetPersonPhoto.previewUrl) URL.revokeObjectURL(targetPersonPhoto.previewUrl);
-    setTargetPersonPhoto({ previewUrl: '', fileName: '' });
-    setPersonRecognition({ status: 'idle', personId: null, confidence: null });
-    setPersonUploadKey(prev => prev + 1);
-  };
+  const [showRemoved, setShowRemoved] = useState(false);
+  const [rescuedIds, setRescuedIds] = useState(new Set());
 
   const handleImportMediaChange = async (event) => {
     const files = Array.from(event.target.files ?? []);
@@ -99,10 +53,11 @@ const FilterPage = () => {
         url, importedAt, album: '导入', favorite: false, tags: [], date, time, location, gps, people: [], personIds: []
       });
     }
+    const newIds = mapped.map(m => m.id);
     setImportedMedia(prev => [...prev, ...mapped]);
-    setManualTab('recent');
-    setManualAlbum('');
-    setManualSearch('');
+    if (selectionMode === 'manual') {
+      setManualSelectedIds(prev => [...prev, ...newIds]);
+    }
     setManualDate('');
   };
 
@@ -111,8 +66,6 @@ const FilterPage = () => {
     setImportedMedia([]);
     setManualImportKey(prev => prev + 1);
     setManualSelectedIds([]);
-    setManualTab('recent');
-    setManualAlbum('');
   };
 
   const normalizedTime = useMemo(() => {
@@ -125,37 +78,51 @@ const FilterPage = () => {
 
   const allMedia = useMemo(() => [...importedMedia], [importedMedia]);
 
-  const selectedMedia = useMemo(() => {
-    if (selectionMode === 'manual') return allMedia.filter(m => manualSelectedIds.includes(m.id));
-    return filterMedia(allMedia, {
-      timeRange: enableTime ? timeRange : null, customDate: enableTime ? customDate : null,
-      people: selectedPeople, enableFormat, formatOptions
-    });
-  }, [selectionMode, allMedia, manualSelectedIds, enableTime, timeRange, customDate, selectedPeople, enableFormat, formatOptions]);
-
   const manualVisibleMedia = useMemo(() => {
-    let list = allMedia;
-    if (manualTab === 'favorites') list = list.filter(m => m.favorite);
-    if (manualTab === 'albums' && manualAlbum) list = list.filter(m => m.album === manualAlbum);
-    if (manualSearch) { const q = manualSearch.toLowerCase(); list = list.filter(m => (m.date && m.date.includes(q)) || (m.location && m.location.toLowerCase().includes(q)) || (m.tags && m.tags.some(t => t.toLowerCase().includes(q)))); }
-    if (manualDate) list = list.filter(m => m.date === manualDate);
-    return list;
-  }, [allMedia, manualTab, manualAlbum, manualSearch, manualDate]);
+    if (!manualDate) return allMedia;
+    return allMedia.filter(m => m.date === manualDate);
+  }, [allMedia, manualDate]);
+
+  const filterResult = useMemo(() => {
+    if (selectionMode === 'manual') {
+      const selected = allMedia.filter(m => manualSelectedIds.includes(m.id));
+      const removed = allMedia.filter(m => !manualSelectedIds.includes(m.id) && manualVisibleMedia.includes(m));
+      return { selectedMedia: selected, removedMedia: removed, removedByDedup: 0 };
+    }
+    const passed = filterMedia(allMedia, {
+      timeRange: enableTime ? timeRange : null, customDate: enableTime ? customDate : null,
+      people: [], enableFormat, formatOptions
+    });
+    const filterRejected = allMedia.filter(m => !passed.includes(m));
+    return { selectedMedia: passed, removedMedia: filterRejected, removedByDedup: 0 };
+  }, [selectionMode, allMedia, manualSelectedIds, manualVisibleMedia, enableTime, timeRange, customDate, enableFormat, formatOptions]);
+
+  const rescuedMediaInFilter = useMemo(() =>
+    selectionMode === 'filter' ? allMedia.filter(m => rescuedIds.has(m.id)) : [],
+  [allMedia, rescuedIds, selectionMode]);
+  const selectedMedia = useMemo(() => {
+    const base = filterResult.selectedMedia;
+    if (selectionMode === 'filter' && rescuedMediaInFilter.length > 0) {
+      return [...rescuedMediaInFilter.filter(m => !base.some(b => b.id === m.id)), ...base];
+    }
+    return base;
+  }, [filterResult.selectedMedia, rescuedMediaInFilter, selectionMode]);
+  const removedMedia = filterResult.removedMedia;
 
   const manualVisibleMediaSorted = useMemo(() => [...manualVisibleMedia].sort((a, b) => (b.date || '').localeCompare(a.date || '')), [manualVisibleMedia]);
 
-  const manualAlbums = useMemo(() => {
-    const map = new Map();
-    allMedia.forEach(m => { const album = m.album || '未分类'; if (!map.has(album)) map.set(album, { name: album, count: 0, coverUrl: m.url || '' }); map.get(album).count += 1; });
-    return Array.from(map.values());
-  }, [allMedia]);
-
   const manualEstimatedSeconds = useMemo(() => manualSelectedIds.length * 2, [manualSelectedIds]);
+
+  const handleSwitchMode = (mode) => {
+    setSelectionMode(mode);
+    if (mode === 'manual') {
+      setManualSelectedIds(allMedia.map(m => m.id));
+    }
+  };
 
   const handleToggleManualMedia = (mediaId) => setManualSelectedIds(prev => prev.includes(mediaId) ? prev.filter(id => id !== mediaId) : [...prev, mediaId]);
   const handleSelectAllManual = () => { const ids = manualVisibleMediaSorted.map(m => m.id); setManualSelectedIds(prev => { const s = new Set(prev); ids.forEach(id => s.add(id)); return Array.from(s); }); };
   const handleClearManual = () => setManualSelectedIds([]);
-  const handleToggleFavorite = (mediaId) => setImportedMedia(prev => prev.map(m => (m.id === mediaId ? { ...m, favorite: !m.favorite } : m)));
   const handleApplyLocation = () => {
     if (!customLocation.trim()) return;
     const loc = customLocation.trim();
@@ -166,6 +133,15 @@ const FilterPage = () => {
       return selectedMedia.some(s => s.id === m.id) ? { ...m, location: loc } : m;
     }));
   };
+  const handleRescue = (mediaId) => {
+    setRescuedIds(prev => new Set([...prev, mediaId]));
+    if (selectionMode === 'manual') {
+      setManualSelectedIds(prev => prev.includes(mediaId) ? prev : [...prev, mediaId]);
+    }
+  };
+  const visibleRemovedMedia = useMemo(() =>
+    removedMedia.filter(m => !rescuedIds.has(m.id)),
+  [removedMedia, rescuedIds]);
   const handleNext = () => { commitFilter(selectedMedia); navigate('/review'); };
   const handleBack = () => navigate('/home');
 
@@ -173,23 +149,23 @@ const FilterPage = () => {
     <div className="filter-container">
       <header className="filter-header">
         <button className="back-button" onClick={handleBack}>←</button>
-        <h1>筛选素材</h1>
+        <h1>智能导入</h1>
       </header>
       <main className="filter-main">
         <section className="filter-section">
           <h2>选择方式</h2>
           <div className="mode-cards">
-            <button type="button" className={`mode-card ${selectionMode === 'filter' ? 'active' : ''}`} onClick={() => setSelectionMode('filter')}>
-              <div className="mode-card-icon">🔍</div><div className="mode-card-title">智能筛选</div><div className="mode-card-desc">按时间、人物等维度自动筛选</div>
+            <button type="button" className={`mode-card ${selectionMode === 'filter' ? 'active' : ''}`} onClick={() => handleSwitchMode('filter')}>
+              <div className="mode-card-icon">🔍</div><div className="mode-card-title">智能导入</div><div className="mode-card-desc">按时间、格式等维度自动导入</div>
             </button>
-            <button type="button" className={`mode-card ${selectionMode === 'manual' ? 'active' : ''}`} onClick={() => setSelectionMode('manual')}>
-              <div className="mode-card-icon">🖼️</div><div className="mode-card-title">手动选择</div><div className="mode-card-desc">直接浏览相册内容，手动勾选想要的照片</div>
+            <button type="button" className={`mode-card ${selectionMode === 'manual' ? 'active' : ''}`} onClick={() => handleSwitchMode('manual')}>
+              <div className="mode-card-icon">🖼️</div><div className="mode-card-title">手动导入</div><div className="mode-card-desc">浏览所有照片，手动勾选想要的</div>
             </button>
           </div>
         </section>
 
         <section className="filter-section">
-          <h2>{selectionMode === 'filter' ? '导入素材库' : '手动选择素材'}</h2>
+          <h2>导入素材</h2>
           <div className="manual-import">
             <label className="manual-import-button">
               {importedMedia.length === 0 ? '📸 点击导入照片 / 视频' : '继续添加照片 / 视频'}
@@ -210,52 +186,28 @@ const FilterPage = () => {
 
         {selectionMode === 'manual' && (
           <section className="filter-section">
-            <div className="manual-tabs">
-              <button type="button" className={`manual-tab ${manualTab === 'albums' ? 'active' : ''}`} onClick={() => { setManualTab('albums'); setManualAlbum(''); }}>相册列表</button>
-              <button type="button" className={`manual-tab ${manualTab === 'recent' ? 'active' : ''}`} onClick={() => { setManualTab('recent'); setManualAlbum(''); }}>最近</button>
-              <button type="button" className={`manual-tab ${manualTab === 'favorites' ? 'active' : ''}`} onClick={() => { setManualTab('favorites'); setManualAlbum(''); }}>收藏</button>
+            <div className="manual-filters">
+              <input className="manual-date" type="date" value={manualDate} onChange={(e) => setManualDate(e.target.value)} />
             </div>
-            {manualTab === 'albums' && !manualAlbum && (
-              <div className="album-list">
-                {manualAlbums.map(a => (
-                  <button key={a.name} type="button" className="album-item" onClick={() => setManualAlbum(a.name)}>
-                    <img src={a.coverUrl} alt={a.name} />
-                    <div className="album-meta"><div className="album-name">{a.name}</div><div className="album-count">{a.count} 项</div></div>
-                  </button>
-                ))}
+            <div className="manual-actions">
+              <div className="manual-count">已选 {manualSelectedIds.length} 个 · 预计 {formatSeconds(manualEstimatedSeconds)}</div>
+              <div className="manual-buttons">
+                <button className="manual-button" onClick={handleSelectAllManual}>全选当前</button>
+                <button className="manual-button secondary" onClick={handleClearManual}>清空</button>
               </div>
-            )}
-            {(manualTab !== 'albums' || manualAlbum) && (
-              <>
-                {manualTab === 'albums' && manualAlbum && (
-                  <div className="album-header"><button type="button" className="album-back" onClick={() => setManualAlbum('')}>← 相册列表</button><div className="album-title">{manualAlbum}</div></div>
-                )}
-                <div className="manual-filters">
-                  <input className="manual-search" value={manualSearch} onChange={(e) => setManualSearch(e.target.value)} placeholder="搜索日期 / 地点 / 标签" />
-                  <input className="manual-date" type="date" value={manualDate} onChange={(e) => setManualDate(e.target.value)} />
-                </div>
-                <div className="manual-actions">
-                  <div className="manual-count">已选 {manualSelectedIds.length} 个 · 预计 {formatSeconds(manualEstimatedSeconds)}</div>
-                  <div className="manual-buttons">
-                    <button className="manual-button" onClick={handleSelectAllManual}>全选当前</button>
-                    <button className="manual-button secondary" onClick={handleClearManual}>清空</button>
-                  </div>
-                </div>
-                <div className="manual-grid">
-                  {manualVisibleMediaSorted.map(media => {
-                    const selected = manualSelectedIds.includes(media.id);
-                    return (
-                      <button key={media.id} type="button" className={`manual-item ${selected ? 'selected' : ''}`} onClick={() => handleToggleManualMedia(media.id)}>
-                        <button type="button" className={`favorite-toggle ${media.favorite ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); handleToggleFavorite(media.id); }}>{media.favorite ? '★' : '☆'}</button>
-                        <img src={media.type === 'photo' ? media.url : 'https://copilot-cn.bytedance.net/api/ide/v1/text_to_image?prompt=video%20thumbnail&image_size=square'} alt="素材预览" />
-                        <span className="manual-type">{media.type === 'photo' ? '📷' : '🎬'}</span>
-                        <span className="manual-check">{selected ? '✓' : ''}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
+            </div>
+            <div className="manual-grid">
+              {manualVisibleMediaSorted.map(media => {
+                const selected = manualSelectedIds.includes(media.id);
+                return (
+                  <button key={media.id} type="button" className={`manual-item ${selected ? 'selected' : ''}`} onClick={() => handleToggleManualMedia(media.id)}>
+                    <img src={media.type === 'photo' ? media.url : 'https://copilot-cn.bytedance.net/api/ide/v1/text_to_image?prompt=video%20thumbnail&image_size=square'} alt="素材预览" />
+                    <span className="manual-type">{media.type === 'photo' ? '📷' : '🎬'}</span>
+                    <span className="manual-check">{selected ? '✓' : ''}</span>
+                  </button>
+                );
+              })}
+            </div>
           </section>
         )}
 
@@ -286,42 +238,12 @@ const FilterPage = () => {
               )}
             </section>
 
-            <section className="filter-section">
-              <h2>人物维度</h2>
-              <div className="person-upload">
-                <div className="person-upload-row">
-                  <label className="person-upload-button">上传目标人物照片<input key={personUploadKey} className="person-upload-input" type="file" accept="image/*" onChange={handleTargetPersonPhotoChange} /></label>
-                  {targetPersonPhoto.previewUrl && <button className="person-upload-clear" onClick={handleClearTargetPerson}>清除</button>}
-                </div>
-                {targetPersonPhoto.previewUrl && (
-                  <div className="person-upload-preview">
-                    <img src={targetPersonPhoto.previewUrl} alt="目标人物" />
-                    <div className="person-upload-meta">
-                      <div className="person-upload-name">{targetPersonPhoto.fileName}</div>
-                      {personRecognition.status === 'processing' && <div className="person-upload-status">识别中…</div>}
-                      {personRecognition.status === 'error' && <div className="person-upload-status error">识别失败，请换一张更清晰的人脸照片</div>}
-                      {personRecognition.status === 'done' && personRecognition.personId && (
-                        <div className="person-upload-status">识别结果：{mockPeople.find(p => p.id === personRecognition.personId)?.name}{personRecognition.confidence ? `（置信度 ${personRecognition.confidence}）` : ''}</div>
-                      )}
-                      <div className="person-upload-controls">
-                        <select className="person-upload-select" value={personRecognition.personId ?? ''} onChange={(e) => { const pid = Number(e.target.value); if (!pid) return; setPersonRecognition(prev => ({ ...prev, status: 'done', personId: pid })); ensurePersonSelected(pid); }}>
-                          <option value="">手动选择人物</option>
-                          {mockPeople.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
-                        <button className={`person-upload-only ${personRecognition.personId ? '' : 'disabled'}`} onClick={() => personRecognition.personId && setSelectedPeople([personRecognition.personId])} disabled={!personRecognition.personId}>仅筛选此人</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
+            <section className="filter-section disabled-section">
+              <div className="section-title-row">
+                <h2>人物维度</h2>
+                <span className="coming-soon-badge">功能开发中</span>
               </div>
-              <div className="people-options">
-                {mockPeople.map(person => (
-                  <button key={person.id} className={`person-option ${selectedPeople.includes(person.id) ? 'active' : ''}`}
-                    onClick={() => setSelectedPeople(prev => prev.includes(person.id) ? prev.filter(id => id !== person.id) : [...prev, person.id])}>
-                    {person.name}
-                  </button>
-                ))}
-              </div>
+              <p className="disabled-hint">人脸识别筛选功能预计后续版本上线</p>
             </section>
 
             <section className="filter-section">
@@ -339,18 +261,11 @@ const FilterPage = () => {
               </div>
             </section>
 
-            <section className="filter-section">
-              <h2>智能去重</h2>
-              <div className="deduplication-options">
-                <div className="format-checkbox"><input type="checkbox" id="deduplication" defaultChecked /><label htmlFor="deduplication">自动识别相似照片</label></div>
-                <p className="deduplication-hint">系统将保留最佳质量的照片</p>
-              </div>
-            </section>
           </>
         )}
 
         <section className="filter-section">
-          <h2>筛选结果</h2>
+          <h2>最终素材</h2>
           <div className="filter-result">
             <p>找到 {selectedMedia.length} 个媒体文件</p>
             <div className="media-grid">
@@ -365,13 +280,37 @@ const FilterPage = () => {
           </div>
         </section>
 
+        {visibleRemovedMedia.length > 0 && (
+          <section className="filter-section removed-section">
+            <button type="button" className="removed-toggle" onClick={() => setShowRemoved(!showRemoved)}>
+              <h2>未选中的素材 ({visibleRemovedMedia.length} 张)</h2>
+              <span className={`toggle-arrow ${showRemoved ? 'open' : ''}`}>▾</span>
+            </button>
+            {showRemoved && (
+              <div className="removed-grid">
+                {visibleRemovedMedia.slice(0, 30).map(media => (
+                  <div key={media.id} className="removed-item">
+                    <img src={media.type === 'photo' ? media.url : 'https://copilot-cn.bytedance.net/api/ide/v1/text_to_image?prompt=video%20thumbnail&image_size=square'} alt="被过滤素材" />
+                    <div className="removed-meta">
+                      <span>{media.date || ''}</span>
+                      <span>{media.location || ''}</span>
+                    </div>
+                    <button type="button" className="rescue-button" onClick={() => handleRescue(media.id)}>捞回</button>
+                  </div>
+                ))}
+                {visibleRemovedMedia.length > 30 && <p className="removed-more">...还有 {visibleRemovedMedia.length - 30} 张</p>}
+              </div>
+            )}
+          </section>
+        )}
+
         <section className="filter-section">
           <h2>地点（可选）</h2>
           <div className="location-input-row">
             <input className="location-input" value={customLocation} onChange={(e) => setCustomLocation(e.target.value)} placeholder="输入地点名称，如：北京、杭州西湖" />
             <button className="location-apply-button" onClick={handleApplyLocation} disabled={!customLocation.trim()}>应用</button>
           </div>
-          <p className="location-hint">为当前筛选结果中的素材统一设置地点，将显示在视频中</p>
+          <p className="location-hint">为当前选中的素材统一设置地点，将显示在视频中</p>
         </section>
 
         <button className={`next-button ${selectedMedia.length === 0 ? 'disabled' : ''}`} onClick={handleNext} disabled={selectedMedia.length === 0}>下一步</button>

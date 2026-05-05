@@ -61,15 +61,25 @@ export const computeFingerprint = async (file) => {
 
 /**
  * Build a dedup grouping key from media metadata.
- * Media with the same key are considered potential duplicates.
+ * Strength controls grouping granularity:
+ *   81-100: date + location + people (most aggressive)
+ *   41-80:  date only
+ *   1-40:   year-month only
+ *   0:      no dedup (empty key for each item = all unique)
  */
-export const buildDedupKey = (media) => {
+export const buildDedupKey = (media, strength = 80) => {
+  if (!strength) return `${media.id}`;
   const date = media.date ?? '';
   const location = media.location ?? '';
   const peopleKey = Array.isArray(media.personIds)
     ? media.personIds.join('-')
     : (Array.isArray(media.people) ? media.people.join('-') : '');
-  return `${date}|${location}|${peopleKey}`;
+
+  if (strength > 80) return `${date}|${location}|${peopleKey}`;
+  if (strength > 40) return date;
+  // strength 1-40: group by year-month only
+  const ym = typeof date === 'string' && date.length >= 7 ? date.slice(0, 7) : date;
+  return ym;
 };
 
 /**
@@ -86,10 +96,10 @@ export const computeQualityScore = (media) => {
  * Group media items by dedup key and apply quality scoring.
  * Returns array of { key, items[] } where items are sorted by quality descending.
  */
-export const groupByDuplicate = (mediaList) => {
+export const groupByDuplicate = (mediaList, strength = 80) => {
   const map = new Map();
   mediaList.forEach(m => {
-    const key = buildDedupKey(m);
+    const key = buildDedupKey(m, strength);
     const list = map.get(key) ?? [];
     list.push(m);
     map.set(key, list);

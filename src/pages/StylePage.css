@@ -99,14 +99,9 @@
   font-weight: 600;
 }
 
-.style-tag.free {
-  background: #4CAF50;
-  color: white;
-}
-
-.style-tag.paid-tag {
-  background: #FF9800;
-  color: white;
+.style-tag.coming-soon-tag {
+  background: #e5e7eb;
+  color: #6b7280;
 }
 
 .style-card.paid {

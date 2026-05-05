@@ -213,196 +213,37 @@ export const inferLocationLine = (media) => {
   return '';
 };
 
-const getSeason = (dateStr) => {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d)) return '';
-  const m = d.getMonth() + 1;
-  if (m >= 3 && m <= 5) return '春';
-  if (m >= 6 && m <= 8) return '夏';
-  if (m >= 9 && m <= 11) return '秋';
-  return '冬';
+const getSeason = (d) => { if (!d) return ''; const m = new Date(d).getMonth() + 1; if (isNaN(m)) return ''; return m >= 3 && m <= 5 ? '春' : m >= 6 && m <= 8 ? '夏' : m >= 9 && m <= 11 ? '秋' : '冬'; };
+const SN = { 春: '春天', 夏: '夏天', 秋: '秋天', 冬: '冬天' };
+
+const P = {
+  warm: ['{w}的{s}，风里都是温柔', '在{w}的那几天，日子过得很慢', '那天下午阳光从窗帘缝里钻进来', '有些瞬间看一眼就能回到当时', '日子普普通通回忆却闪闪发光', '{s}的风把记忆吹得很远', '时间过得真快还好有照片替我们记住', '镜头定格的就是生活最好的样子'],
+  travel: ['{w}，比想象中还要美', '站在{w}的那一刻觉得一切都值了', '路上的风景永远不止在远方', '出发的那一刻故事就已经开始了', '旅行的意义就是遇见不一样的自己', '{s}的旅途每一帧都是明信片', '那些走过的路都变成了故事', '最好的风景永远在路上'],
+  couple: ['在{w}和你一起看了最美的日落', '{w}的那条街我们来回走了好多遍', '你笑起来的样子比{s}的花还好看', '心动从来不是偶然是每件小事加起来', '有你在身边平凡的日子也会发光', '{s}的约会每次都舍不得结束', '谢谢你出现在我的镜头里', '两个人在一起连发呆都是幸福的'],
+  vintage: ['{w}还是记忆里的样子吗', '那些年在{w}留下了太多故事', '旧时光也会发亮像老电影里的画面', '岁月把我们雕刻得更温柔了', '把回忆酿成一杯酒越久越醇', '泛黄的照片里藏着最鲜活的青春', '这些回忆啊是时间偷不走的宝贝', '回头看那些苦的甜的变成了故事'],
 };
-
-const SEASON_NAME = { 春: '春天', 夏: '夏天', 秋: '秋天', 冬: '冬天' };
-
-// Phrase pools keyed by style, each with location-aware and standalone phrases
-const PHRASES = {
-  warm: {
-    withPlace: [
-      s => `${s.where}的${s.seasonName}，风里都是温柔`,
-      s => `在${s.where}的那几天，日子过得很慢很慢`,
-      s => `${s.where}的阳光下，一切都刚刚好`,
-      s => `记得${s.where}那天，天空特别蓝`,
-      s => `${s.where}的街道，走着走着就笑了`,
-      s => `${s.where}的黄昏，美得像一场梦`,
-      s => `那时候在${s.where}，连空气都是甜的`,
-      s => `${s.where}的清晨，鸟叫声叫醒了整个城市`,
-    ],
-    standalone: [
-      s => `那天下午的阳光，从窗帘缝里钻进来`,
-      s => `说不清为什么，就是很喜欢这一刻`,
-      s => `时间过得真快，还好有照片替我们记住`,
-      s => `有些瞬间，看一眼就能回到当时`,
-      s => `镜头定格的，就是生活最好的样子`,
-      s => `不是每一天都精彩，但每一天都值得`,
-      s => `这张照片里，藏着好多没说出口的话`,
-      s => `日子普普通通，回忆却闪闪发光`,
-      s => `${s.seasonName}的风，把记忆吹得很远`,
-      s => `那个${s.seasonName}，发生了好多故事`,
-      s => `${s.monthName}的光线，柔和得刚刚好`,
-      s => `累了的时候，就翻翻这些老照片`,
-      s => `生活最好的滤镜，就是时间`,
-      s => `幸福藏在这些不起眼的角落里`,
-    ],
-  },
-  travel: {
-    withPlace: [
-      s => `${s.where}，比想象中还要美`,
-      s => `站在${s.where}的那一刻，觉得一切都值了`,
-      s => `${s.where}的风景，相机拍不出十分之一`,
-      s => `走了很远的路，才到了${s.where}`,
-      s => `${s.where}的风，吹走了所有疲惫`,
-      s => `在${s.where}，找到了久违的自由`,
-      s => `${s.where}的日落，见过就不会忘`,
-      s => `地图上的${s.where}，终于变成了脚下的路`,
-    ],
-    standalone: [
-      s => `路上的风景，永远不止在远方`,
-      s => `脚步到过的地方，都会发光`,
-      s => `世界那么大，还好没有停下`,
-      s => `出发的那一刻，故事就已经开始了`,
-      s => `有些路，一个人走也很精彩`,
-      s => `车窗外的风景，一张都不想错过`,
-      s => `旅行的意义，就是遇见不一样的自己`,
-      s => `下一站会是哪里？已经开始期待了`,
-      s => `${s.seasonName}的旅途，每一帧都是明信片`,
-      s => `背包很重，但心里很轻`,
-      s => `陌生的城市，熟悉的感动`,
-      s => `那些走过的路，都变成了故事`,
-      s => `最好的风景，永远在路上`,
-      s => `这一次，终于把远方变成了日常`,
-    ],
-  },
-  couple: {
-    withPlace: [
-      s => `在${s.where}，和你一起看了最美的日落`,
-      s => `${s.where}的那条街，我们来回走了好多遍`,
-      s => `还记得${s.where}吗？那天你笑得很开心`,
-      s => `${s.where}的风里，有我们两个人的秘密`,
-      s => `在${s.where}，时间过得特别快`,
-      s => `${s.where}的夜晚，星星都格外亮`,
-      s => `和你在${s.where}，做什么都觉得有趣`,
-      s => `${s.where}的咖啡馆，我们聊了一整个下午`,
-    ],
-    standalone: [
-      s => `你笑起来的样子，比${s.seasonName}的花还好看`,
-      s => `心动从来不是偶然，是每件小事加起来`,
-      s => `爱情藏在这些琐碎的日常里`,
-      s => `相视一笑的瞬间，就是最好的答案`,
-      s => `甜蜜在细节里悄悄发芽`,
-      s => `有你在身边，平凡的日子也会发光`,
-      s => `两个人在一起，连发呆都是幸福的`,
-      s => `这一年，我们一起走过了好多地方`,
-      s => `喜欢一个人，就是想把每一天都分享给她`,
-      s => `吵架也好，和好也好，都是我们的故事`,
-      s => `${s.seasonName}的约会，每次都舍不得结束`,
-      s => `你说过的话，我都好好收在心里`,
-      s => `一起变老，听起来是最浪漫的事`,
-      s => `谢谢你，出现在我的镜头里`,
-    ],
-  },
-  vintage: {
-    withPlace: [
-      s => `${s.where}，还是记忆里的样子吗`,
-      s => `那些年在${s.where}，留下了太多故事`,
-      s => `${s.where}的老街，藏着回不去的时光`,
-      s => `又想起${s.where}，那时候的我们真年轻`,
-      s => `${s.where}的照片泛了黄，但回忆还是鲜活的`,
-      s => `好久没回${s.where}了，有点想念`,
-      s => `${s.where}的每个角落，都有一段往事`,
-      s => `那时候的${s.where}，还不是现在的模样`,
-    ],
-    standalone: [
-      s => `旧时光也会发亮，像老电影里的画面`,
-      s => `岁月把我们雕刻得更温柔了`,
-      s => `把回忆酿成一杯酒，越久越醇`,
-      s => `慢慢走，慢慢爱，慢慢变老`,
-      s => `那时候没有滤镜，但笑容是真实的`,
-      s => `老照片有一种魔力，看一眼就穿越回去`,
-      s => `有些东西变了，有些永远不会变`,
-      s => `年轻的时候，总觉得日子还很长`,
-      s => `泛黄的照片里，藏着最鲜活的青春`,
-      s => `这些回忆啊，是时间偷不走的宝贝`,
-      s => `回头看，那些苦的甜的，都变成了故事`,
-      s => `${s.seasonName}又来了，和那一年一样`,
-      s => `想念那个没有智能手机的年代`,
-      s => `时间走得真快，还好我们走得不算太远`,
-    ],
-  },
-};
-
-const getPositionType = (index, total) => {
-  if (index === 0) return 'open';
-  if (index === total - 1) return 'close';
-  if (index <= Math.floor(total * 0.3)) return 'early';
-  if (index >= Math.ceil(total * 0.7)) return 'late';
-  return 'mid';
-};
-
-const OPEN_PHRASES = [
-  s => `故事，从${s.seasonName || '这一天'}开始`,
-  s => `${s.seasonName || '时光'}的第一页，轻轻翻开`,
-  s => `一切，都要从这里说起`,
-  s => `最好的${s.seasonName || '日子'}，在这一刻启程`,
-  s => `回忆的第一帧，总是最珍贵的`,
-];
-
-const CLOSE_PHRASES = [
-  s => `故事到这里，但回忆还在继续`,
-  s => `谢谢${s.seasonName || '时光'}，给了我们这么多好故事`,
-  s => `这一页翻过去了，但记忆不会`,
-  s => `最好的时光，永远是"那些年"`,
-  s => `合上相册，感动还留在心里`,
-  s => `这些片段，拼成了最好的${s.seasonName || '时光'}`,
-];
+const PO = ['故事从{sn}开始', '{sn}的第一页轻轻翻开', '一切都要从这里说起'];
+const PC = ['故事到这里但回忆还在继续', '谢谢{sn}给了我们这么多好故事', '这些片段拼成了最好的{sn}'];
 
 export const buildNarrationLine = ({ tone, styleId, media, index, total }) => {
-  const where = inferLocationLine(media);
-  const date = media?.date || '';
-  const season = getSeason(date);
-  const seasonName = SEASON_NAME[season] || '';
-  const monthName = date ? `${new Date(date).getMonth() + 1}月` : '';
-  const pos = getPositionType(index, total);
-
+  const where = inferLocationLine(media) || '';
+  const sn = SN[getSeason(media?.date || '')] || '时光';
   const seed = (media?.id ?? 0) + index * 97 + total * 131;
   const r = seeded01(seed);
   const pick = (arr) => arr[Math.floor(r * arr.length) % arr.length];
-
-  const styleKey = styleId === 'travel' ? 'travel' : styleId === 'couple' ? 'couple' : styleId === 'vintage' ? 'vintage' : 'warm';
-  const pool = PHRASES[styleKey] || PHRASES.warm;
-  const ctx = { where, season, seasonName, monthName };
+  const key = styleId === 'travel' ? 'travel' : styleId === 'couple' ? 'couple' : styleId === 'vintage' ? 'vintage' : 'warm';
+  const pool = P[key] || P.warm;
 
   let phrase;
-  if (pos === 'open') {
-    phrase = pick(OPEN_PHRASES)(ctx);
-  } else if (pos === 'close') {
-    phrase = pick(CLOSE_PHRASES)(ctx);
-  } else if (where && seeded01(seed + 3) > 0.35) {
-    phrase = pick(pool.withPlace)(ctx);
-  } else {
-    phrase = pick(pool.standalone)(ctx);
-  }
+  if (index === 0) phrase = pick(PO);
+  else if (index === total - 1) phrase = pick(PC);
+  else phrase = pick(pool);
 
-  if (tone === '简约') return phrase.replace(/，/g, ' ');
-  if (tone === '幽默') {
-    const jokes = ['这一幕值得反复播放', '这帧自带BGM', '此处应该有弹幕', '名场面打卡', '生活的小彩蛋出现了', '这谁拍得这么好？哦是我', '截图当壁纸了'];
-    return pick(jokes) + '——' + phrase;
-  }
-  if (tone === '文艺') {
-    const prefixes = ['光落在回忆里，', '风把记忆吹开，', '时间轻声说，', '心事藏进画面，', '镜头记得，', '光影交错间，'];
-    return pick(prefixes) + phrase;
-  }
+  phrase = phrase.replace(/{w}/g, where || '这里').replace(/{s}/g, sn).replace(/{sn}/g, sn);
+
+  if (tone === '简约') return phrase;
+  if (tone === '幽默') return pick(['这一幕值得反复播放', '这帧自带BGM', '此处应该有弹幕', '名场面打卡', '生活的小彩蛋出现了']) + '——' + phrase;
+  if (tone === '文艺') return pick(['光落在回忆里', '风把记忆吹开', '时间轻声说', '心事藏进画面', '镜头记得', '光影交错间']) + '，' + phrase;
   return phrase;
 };
 
@@ -450,6 +291,7 @@ export const renderVideo = async ({
   bgmEnabled = true,
   bgmVolume = 0.35,
   bgmPreset = 'warm',
+  photoSpeed = 'medium',
   onProgress = () => {},
   bgmModule = null
 }) => {
@@ -465,7 +307,8 @@ export const renderVideo = async ({
   if (!ctx) return null;
 
   const stream = canvas.captureStream(30);
-  const recorder = new MediaRecorder(stream, { mimeType });
+  const bps = resolution === '1080p' ? 8_000_000 : 4_000_000;
+  const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: bps });
   const chunks = [];
   let started = false;
   let audioCtx = null;
@@ -485,9 +328,11 @@ export const renderVideo = async ({
       }));
     }
 
-    const perSec = transitionParams[0]?.perSec ?? 2.0;
+    const perSec = photoSpeed === 'fast' ? 1.5 : photoSpeed === 'slow' ? 5.0 : 3.0;
     const perFrames = Math.max(1, Math.round(perSec * fps));
-    const durationSec = (orderedMedia.length * perFrames) / fps;
+    const openingDurSec = 3;
+    const endingDurSec = 3;
+    const durationSec = openingDurSec + (orderedMedia.length * perFrames) / fps + endingDurSec;
 
     // --- BGM setup ---
     if (bgmEnabled && bgmModule?.createBgm) {
@@ -528,7 +373,34 @@ export const renderVideo = async ({
       } catch {
         imageMap.set(photos[i].id, null);
       }
-      onProgress(Math.round(((i + 1) / Math.max(photos.length, 1)) * 30));
+      onProgress(5 + Math.round(((i + 1) / Math.max(photos.length, 1)) * 25));
+      await sleepFrame();
+    }
+
+    // --- Opening title screen (3 seconds) ---
+    const openingFrames = fps * openingDurSec;
+    for (let f = 0; f < openingFrames; f += 1) {
+      const t = f / openingFrames;
+      ctx.fillStyle = '#0b0b0b';
+      ctx.fillRect(0, 0, size.w, size.h);
+
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, t * 3);
+
+      ctx.fillStyle = '#fff';
+      ctx.font = `bold ${Math.round(size.w * 0.04)}px system-ui, -apple-system, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText((textBundle?.title || '我的回忆录').slice(0, 30), size.w / 2, size.h * 0.4);
+
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.font = `${Math.round(size.w * 0.022)}px system-ui, -apple-system, sans-serif`;
+      const introText = (textBundle?.intro || '').slice(0, 60);
+      ctx.fillText(introText, size.w / 2, size.h * 0.52);
+
+      ctx.textAlign = 'left';
+      ctx.restore();
+
+      onProgress(Math.round((f / openingFrames) * 5));
       await sleepFrame();
     }
 
@@ -594,10 +466,33 @@ export const renderVideo = async ({
         ctx.fillText(line3.slice(0, 42), 64, size.h - boxH + (hasPlace ? 106 : 68));
         ctx.restore();
 
-        const pct = 30 + Math.round(((i + f / perFrames) / Math.max(orderedMedia.length, 1)) * 70);
+        const pct = 30 + Math.round(((i + f / perFrames) / Math.max(orderedMedia.length, 1)) * 65);
         onProgress(Math.min(99, pct));
         await sleepFrame();
       }
+    }
+
+    // --- Ending screen (3 seconds) ---
+    const endingFrames = fps * endingDurSec;
+    for (let f = 0; f < endingFrames; f += 1) {
+      const t = f / endingFrames;
+      ctx.fillStyle = '#0b0b0b';
+      ctx.fillRect(0, 0, size.w, size.h);
+
+      ctx.save();
+      const fadeOut = f > endingFrames * 0.7 ? 1 - (f - endingFrames * 0.7) / (endingFrames * 0.3) : 1;
+      ctx.globalAlpha = Math.min(1, t * 3) * fadeOut;
+
+      ctx.fillStyle = '#fff';
+      ctx.font = `${Math.round(size.w * 0.026)}px system-ui, -apple-system, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText((textBundle?.ending || '').slice(0, 50), size.w / 2, size.h * 0.48);
+
+      ctx.textAlign = 'left';
+      ctx.restore();
+
+      onProgress(Math.min(99, 95 + Math.round((f / endingFrames) * 4)));
+      await sleepFrame();
     }
 
     // --- Finalize ---

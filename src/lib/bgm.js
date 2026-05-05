@@ -1,6 +1,6 @@
 /**
  * Background music module.
- * Tries to load a real mp3 from /bgm/ first; falls back to Web Audio synth.
+ * Tries to load a real mp3 from /bgm/ first; falls back to Web Audio synth only on failure.
  */
 
 const BGM_FILES = {
@@ -18,55 +18,60 @@ const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
  */
 export const createBgm = ({ audioCtx, destination, durationSec, volume, preset }) => {
   const gain = audioCtx.createGain();
-  gain.gain.value = Math.max(0, Math.min(1, volume));
+  gain.gain.value = 0; // Start silent, fade in after source is ready
   gain.connect(destination);
 
   const startAt = audioCtx.currentTime + 0.05;
   const endAt = startAt + Math.max(0.2, durationSec);
 
-  // Fade envelope
-  gain.gain.setValueAtTime(0, startAt);
-  gain.gain.linearRampToValueAtTime(Math.max(0, Math.min(1, volume)), startAt + 0.4);
-  gain.gain.setValueAtTime(Math.max(0, Math.min(1, volume)), Math.max(startAt + 0.4, endAt - 0.8));
-  gain.gain.linearRampToValueAtTime(0, endAt);
-
   let stopped = false;
   let sourceNode = null;
+  let synthNodes = null;
+
+  const applyFadeEnvelope = () => {
+    gain.gain.cancelScheduledValues(audioCtx.currentTime);
+    const now = audioCtx.currentTime;
+    const fadeStart = Math.max(now, startAt);
+    gain.gain.setValueAtTime(0, fadeStart);
+    gain.gain.linearRampToValueAtTime(volume, fadeStart + 0.6);
+    gain.gain.setValueAtTime(volume, Math.max(fadeStart + 0.6, endAt - 0.8));
+    gain.gain.linearRampToValueAtTime(0, endAt);
+  };
 
   const stopAll = () => {
     if (stopped) return;
     stopped = true;
     try { sourceNode?.stop(); } catch { /* noop */ }
+    try { synthNodes?.stop(); } catch { /* noop */ }
     try { gain.disconnect(); } catch { /* noop */ }
   };
 
-  // Try loading real mp3 — async, but start synth fallback immediately
   const files = BGM_FILES[preset] || BGM_FILES.warm;
   const url = pickRandom(files);
 
-  // Start synth fallback right away (will be replaced if mp3 loads fast enough)
-  const synthNodes = startSynthFallback(audioCtx, gain, startAt, endAt, preset);
+  // Try loading mp3 with 2-second timeout — only start synth on failure
+  const loadTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000));
 
-  fetch(url)
-    .then(r => { if (!r.ok) throw new Error(); return r.arrayBuffer(); })
+  Promise.race([
+    fetch(url).then(r => { if (!r.ok) throw new Error(); return r.arrayBuffer(); }),
+    loadTimeout
+  ])
     .then(buf => audioCtx.decodeAudioData(buf))
     .then(audioBuffer => {
       if (stopped) return;
-      // Align switch timing to avoid pop on late mp3 load
-      const switchAt = Math.max(startAt, audioCtx.currentTime + 0.03);
-      // Fade synth out before stopping
-      try { synthNodes.mix?.gain.linearRampToValueAtTime(0, switchAt); } catch { /* noop */ }
-      synthNodes.stop(switchAt);
-      // Play real audio aligned with synth stop
       sourceNode = audioCtx.createBufferSource();
       sourceNode.buffer = audioBuffer;
       sourceNode.loop = true;
       sourceNode.connect(gain);
-      sourceNode.start(switchAt, (switchAt - startAt) % audioBuffer.duration);
+      sourceNode.start(Math.max(audioCtx.currentTime, startAt));
       sourceNode.stop(endAt);
+      applyFadeEnvelope();
     })
     .catch(() => {
-      // Synth fallback is already playing — do nothing
+      if (stopped) return;
+      // mp3 failed — start synth fallback
+      synthNodes = startSynthFallback(audioCtx, gain, Math.max(audioCtx.currentTime, startAt), endAt, preset);
+      applyFadeEnvelope();
     });
 
   return stopAll;
@@ -101,9 +106,9 @@ function startSynthFallback(audioCtx, destinationGain, startAt, endAt, preset) {
         ? [174.61, 196.0, 220.0, 246.94]
         : [220.0, 196.0, 246.94, 220.0];
 
-  const durationSec = endAt - startAt;
+  const dur = endAt - startAt;
   const step = 2.0;
-  for (let i = 0; i < Math.ceil(durationSec / step) + 1; i += 1) {
+  for (let i = 0; i < Math.ceil(dur / step) + 1; i += 1) {
     const t = startAt + i * step;
     const root = roots[i % roots.length];
     osc1.frequency.setValueAtTime(root, t);

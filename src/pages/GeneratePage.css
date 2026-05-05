@@ -261,6 +261,8 @@
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
+  cursor: pointer;
+  user-select: none;
 }
 
 .order-header h3 {
@@ -728,4 +730,49 @@
 
 .wechat-guide-close:active {
   background: #06ad56;
+}
+
+/* 停留时长 */
+.speed-section {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.speed-section h3 {
+  margin: 0 0 10px 0;
+  font-size: 1.1rem;
+}
+
+.speed-options {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.speed-btn {
+  flex: 1;
+  padding: 10px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.speed-btn.active {
+  border-color: #667eea;
+  background: #f0f4ff;
+  color: #667eea;
+  font-weight: 600;
+}
+
+/* 重新生成高亮 */
+.edit-button.highlight {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: transparent;
 }

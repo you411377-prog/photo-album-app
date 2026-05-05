@@ -934,3 +934,148 @@
   font-size: 0.78rem;
   color: #999;
 }
+
+/* Dedup strength slider */
+.dedup-strength-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.dedup-label {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.dedup-value {
+  font-size: 0.85rem;
+  color: #007aff;
+  font-weight: 600;
+}
+
+.dedup-slider {
+  width: 100%;
+  margin: 4px 0;
+  accent-color: #007aff;
+}
+
+.dedup-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: #999;
+  padding: 0 2px;
+}
+
+/* Removed media section */
+.removed-section {
+  border: 1px dashed #ddd;
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+
+.removed-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.removed-toggle h2 {
+  margin: 0;
+  font-size: 1rem;
+  color: #999;
+}
+
+.toggle-arrow {
+  font-size: 1.1rem;
+  color: #999;
+  transition: transform 0.2s;
+}
+
+.toggle-arrow.open {
+  transform: rotate(180deg);
+}
+
+.removed-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.removed-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-width: 200px;
+}
+
+.removed-item img {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.removed-meta {
+  flex: 1;
+  font-size: 0.78rem;
+  color: #999;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rescue-button {
+  padding: 4px 12px;
+  border: 1px solid #007aff;
+  border-radius: 6px;
+  background: #fff;
+  color: #007aff;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rescue-button:hover {
+  background: #007aff;
+  color: #fff;
+}
+
+.removed-more {
+  width: 100%;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #bbb;
+  margin: 4px 0;
+}
+
+.disabled-section {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.coming-soon-badge {
+  font-size: 0.75rem;
+  background: #e5e7eb;
+  color: #6b7280;
+  padding: 2px 10px;
+  border-radius: 10px;
+}
+
+.disabled-hint {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  margin-top: 4px;
+}
