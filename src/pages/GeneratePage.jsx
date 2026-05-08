@@ -307,7 +307,7 @@ const GeneratePage = () => {
                 <button className="text-regenerate" onClick={() => { setTextBundle(generateTextBundle(textTone, derived)); setSettingsChanged(true); }}>重新生成</button>
               </div>
               <div className="text-field"><div className="text-label">开场标题</div><input className="text-input" value={textBundle.title} onChange={(e) => { setTextBundle(prev => ({ ...prev, title: e.target.value })); setSettingsChanged(true); }} /></div>
-              <div className="text-field"><div className="text-label">旁白</div><textarea className="text-textarea" value={textBundle.intro} onChange={(e) => { setTextBundle(prev => ({ ...prev, intro: e.target.value })); setSettingsChanged(true); }} rows={3} /></div>
+              <div className="text-field"><div className="text-label">开场文字</div><textarea className="text-textarea" value={textBundle.intro} onChange={(e) => { setTextBundle(prev => ({ ...prev, intro: e.target.value })); setSettingsChanged(true); }} rows={3} /></div>
               <div className="text-field"><div className="text-label">结尾寄语</div><textarea className="text-textarea" value={textBundle.ending} onChange={(e) => { setTextBundle(prev => ({ ...prev, ending: e.target.value })); setSettingsChanged(true); }} rows={2} /></div>
             </div>
 

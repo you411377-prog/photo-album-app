@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useProject } from '../context/ProjectContext';
 import { mockStyles } from '../data/mockData';
@@ -8,12 +8,11 @@ const StylePage = () => {
   const navigate = useNavigate();
   const { commitStyle } = useProject();
   const [selectedStyle, setSelectedStyle] = useState(null);
-  const [tone, setTone] = useState('温情');
 
   const handleNext = () => {
     if (!selectedStyle) return;
     const styleData = mockStyles.find(s => s.id === selectedStyle);
-    commitStyle(styleData, tone);
+    commitStyle(styleData, '温情');
     navigate('/generate');
   };
 
@@ -25,12 +24,6 @@ const StylePage = () => {
       </header>
       <main className="style-main">
         <p className="style-description">选择一种风格，我们将为您的照片生成对应的视频效果</p>
-        <div className="tone-row">
-          <div className="tone-label">AI 文字风格</div>
-          <select className="tone-select" value={tone} onChange={(e) => setTone(e.target.value)}>
-            <option value="温情">温情</option><option value="文艺">文艺</option><option value="幽默">幽默</option><option value="简约">简约</option>
-          </select>
-        </div>
         <div className="style-categories">
           <h3>免费模板</h3>
           <div className="style-grid">

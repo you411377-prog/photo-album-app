@@ -114,33 +114,56 @@ export const groupByDuplicate = (mediaList, strength = 80) => {
 
 /**
  * Apply dedup + quality filtering to produce final media list.
+ * dedupKeep: { [groupKey]: Set<id> } — each group can keep multiple items.
  */
 export const applyDedupAndQuality = (
   grouped,
   { enableDedup = true, enableQuality = true, qualityThreshold = 0.4, dedupKeep = {} }
 ) => {
   let removedByDedup = 0;
+  const dedupRemovedItems = [];
 
   const flattened = grouped.flatMap(g => {
     if (!enableDedup) return g.items;
     if (g.items.length <= 1) return g.items;
-    const keepId = dedupKeep[g.key] ?? g.items[0].id;
+
+    const keepSet = dedupKeep[g.key];
+    const keepIds = keepSet instanceof Set ? keepSet
+      : Array.isArray(keepSet) ? new Set(keepSet)
+      : new Set([keepSet ?? g.items[0].id]);
+
+    const kept = [];
     g.items.forEach(it => {
-      if (it.id !== keepId) removedByDedup += 1;
+      if (keepIds.has(it.id)) {
+        kept.push(it);
+      } else {
+        removedByDedup += 1;
+        dedupRemovedItems.push(it);
+      }
     });
-    return g.items.filter(it => it.id === keepId);
+    return kept;
   });
 
   const qualityFiltered = enableQuality
     ? flattened.filter(m => m.qualityScore >= qualityThreshold)
     : flattened;
 
-  const removedByQuality = enableQuality ? flattened.length - qualityFiltered.length : 0;
+  const qualityRemovedItems = enableQuality
+    ? flattened.filter(m => m.qualityScore < qualityThreshold)
+    : [];
+
+  const removedByQuality = qualityRemovedItems.length;
 
   const finalMedia = qualityFiltered.map(m => {
     const { qualityScore: _qs, ...rest } = m;
     return rest;
   });
 
-  return { finalMedia, removedByDedupCount: enableDedup ? removedByDedup : 0, removedByQualityCount: removedByQuality };
+  return {
+    finalMedia,
+    removedByDedupCount: enableDedup ? removedByDedup : 0,
+    removedByQualityCount: removedByQuality,
+    dedupRemovedItems,
+    qualityRemovedItems,
+  };
 };

@@ -447,23 +447,27 @@ export const renderVideo = async ({
         const hasPlace = !!placeText;
         const boxH = hasPlace ? 176 : 140;
         ctx.fillStyle = 'rgba(0,0,0,0.38)';
-        drawRoundedRect(ctx, 36, size.h - 30 - boxH, size.w - 72, boxH, 18);
+        const safeL = 80;
+        const safeR = 80;
+        const safeB = 60;
+        const boxW = size.w - safeL - safeR;
+        drawRoundedRect(ctx, safeL, size.h - safeB - boxH, boxW, boxH, 18);
         ctx.fill();
         ctx.globalAlpha = 1;
         ctx.fillStyle = '#fff';
         // Line 1: time
-        ctx.font = 'bold 40px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
-        ctx.fillText(timeText.slice(0, 22), 64, size.h - boxH + 28);
+        ctx.font = 'bold 40px system-ui, -apple-system, sans-serif';
+        ctx.fillText(timeText.slice(0, 22), safeL + 28, size.h - safeB - boxH + 40);
         // Line 2: location
         if (hasPlace) {
           ctx.fillStyle = 'rgba(255,255,255,0.85)';
-          ctx.font = '28px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
-          ctx.fillText(placeText.slice(0, 42), 64, size.h - boxH + 68);
+          ctx.font = '28px system-ui, -apple-system, sans-serif';
+          ctx.fillText(placeText.slice(0, 42), safeL + 28, size.h - safeB - boxH + 80);
         }
         // Line 3: narration
         ctx.fillStyle = 'rgba(255,255,255,0.82)';
-        ctx.font = '28px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
-        ctx.fillText(line3.slice(0, 42), 64, size.h - boxH + (hasPlace ? 106 : 68));
+        ctx.font = '28px system-ui, -apple-system, sans-serif';
+        ctx.fillText(line3.slice(0, 42), safeL + 28, size.h - safeB - boxH + (hasPlace ? 118 : 80));
         ctx.restore();
 
         const pct = 30 + Math.round(((i + f / perFrames) / Math.max(orderedMedia.length, 1)) * 65);

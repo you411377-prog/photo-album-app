@@ -21,7 +21,6 @@ const FilterPage = () => {
   const [manualImportKey, setManualImportKey] = useState(0);
   const [manualSelectedIds, setManualSelectedIds] = useState([]);
   const [manualDate, setManualDate] = useState('');
-  const [customLocation, setCustomLocation] = useState('');
   const [showRemoved, setShowRemoved] = useState(false);
   const [rescuedIds, setRescuedIds] = useState(new Set());
 
@@ -123,16 +122,6 @@ const FilterPage = () => {
   const handleToggleManualMedia = (mediaId) => setManualSelectedIds(prev => prev.includes(mediaId) ? prev.filter(id => id !== mediaId) : [...prev, mediaId]);
   const handleSelectAllManual = () => { const ids = manualVisibleMediaSorted.map(m => m.id); setManualSelectedIds(prev => { const s = new Set(prev); ids.forEach(id => s.add(id)); return Array.from(s); }); };
   const handleClearManual = () => setManualSelectedIds([]);
-  const handleApplyLocation = () => {
-    if (!customLocation.trim()) return;
-    const loc = customLocation.trim();
-    setImportedMedia(prev => prev.map(m => {
-      if (selectionMode === 'manual') {
-        return manualSelectedIds.includes(m.id) ? { ...m, location: loc } : m;
-      }
-      return selectedMedia.some(s => s.id === m.id) ? { ...m, location: loc } : m;
-    }));
-  };
   const handleRescue = (mediaId) => {
     setRescuedIds(prev => new Set([...prev, mediaId]));
     if (selectionMode === 'manual') {
@@ -149,7 +138,7 @@ const FilterPage = () => {
     <div className="filter-container">
       <header className="filter-header">
         <button className="back-button" onClick={handleBack}>←</button>
-        <h1>智能导入</h1>
+        <h1>素材导入</h1>
       </header>
       <main className="filter-main">
         <section className="filter-section">
@@ -303,15 +292,6 @@ const FilterPage = () => {
             )}
           </section>
         )}
-
-        <section className="filter-section">
-          <h2>地点（可选）</h2>
-          <div className="location-input-row">
-            <input className="location-input" value={customLocation} onChange={(e) => setCustomLocation(e.target.value)} placeholder="输入地点名称，如：北京、杭州西湖" />
-            <button className="location-apply-button" onClick={handleApplyLocation} disabled={!customLocation.trim()}>应用</button>
-          </div>
-          <p className="location-hint">为当前选中的素材统一设置地点，将显示在视频中</p>
-        </section>
 
         <button className={`next-button ${selectedMedia.length === 0 ? 'disabled' : ''}`} onClick={handleNext} disabled={selectedMedia.length === 0}>下一步</button>
       </main>
