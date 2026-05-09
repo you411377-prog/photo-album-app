@@ -83,13 +83,21 @@ export const buildDedupKey = (media, strength = 80) => {
 };
 
 /**
- * Compute a quality score for a media item.
- * Currently uses a deterministic hash — to be replaced with real blur/exposure detection.
+ * Get the quality score for a media item.
+ *
+ * Real assessment lives in `lib/imageQuality.js` and is run asynchronously
+ * during import (see FilterPage). That writes `media.qualityScore` directly.
+ *
+ * This function only reads that pre-computed score. If it's missing
+ * (e.g. mock data or assessment failed), we return a neutral 0.6 so the item
+ * is neither favored nor unfairly punished — the previous id-hash fallback
+ * was misleading and has been removed.
  */
 export const computeQualityScore = (media) => {
-  const base = ((media.id * 2654435761) >>> 0) % 1000;
-  const v = 0.2 + (base / 1000) * 0.8;
-  return Number(v.toFixed(2));
+  if (typeof media?.qualityScore === 'number' && Number.isFinite(media.qualityScore)) {
+    return Number(media.qualityScore.toFixed(2));
+  }
+  return 0.6;
 };
 
 /**

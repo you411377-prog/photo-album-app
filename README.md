@@ -2,101 +2,108 @@
 
 ## 项目概述
 
-一个 Web 端智能相册回忆录生成器。用户导入照片 → 筛选 → 选风格 → 生成带旁白文字叠加和背景音乐的视频 → 下载/分享。核心视频生成使用 FFmpeg.wasm 在浏览器端完成，无需服务端。
+一个 Web 端智能相册回忆录生成器。用户导入照片 → 筛选 → 选风格 → 生成带文字叠加和背景音乐的视频 → 下载/分享。视频在浏览器端用 **Canvas + MediaRecorder** 直接合成，不依赖 wasm，纯前端可运行。
+
+可选能力：
+- 服务端辅助渲染（Express + ffmpeg-static）
+- Supabase 云端分享（Storage + Postgres）
+
+> 当前生效的产品基线见 `docs/prd/current.md`。本 README 描述的是 Web 端代码实现。
 
 ## 技术栈
 
 - **前端**: React 19 + React Router 7 + Vite 8
-- **视频生成**: FFmpeg.wasm 0.12.x（浏览器端合成 MP4，单线程，不需要 SharedArrayBuffer/COOP/COEP）
-- **音频**: OfflineAudioContext 离线渲染 BGM → WAV → FFmpeg 编码为 AAC
-- **图片代理**: Vite 自定义插件 `/img-proxy/`（解决外部图片 CORS 限制，避免 canvas 跨域污染）
-- **后端辅助渲染**: Express 5 + ffmpeg-static（局域网 Node 服务，可选，当前生成的视频无旁白无 BGM）
-- **云端存储**: Supabase（Storage + Table）
+- **视频生成（主路径）**: Canvas 逐帧绘制 + `canvas.captureStream(30)` + `MediaRecorder`
+  - 输出 mime 优先级：`video/mp4 (avc1+aac)` → `video/mp4` → `video/webm (vp9/vp8)` → `video/webm`
+  - 实际产物格式因浏览器而异（桌面 Safari/Chrome 通常出 mp4，部分 Chrome 出 webm）
+- **背景音乐**: 优先加载 `/bgm/{warm,couple,vintage}_1.mp3`，2 秒超时后回退 Web Audio 振荡器合成
+- **图片代理**: Vite 自定义中间件 `/img-proxy/<encodedURL>`，规避 canvas 跨域污染（`SecurityError`）
+- **图片质量评估**: Laplacian variance（清晰度）+ 平均亮度（曝光），结果用于去重组排序与质量过滤
+- **EXIF 解析**: 手写解析 JPEG 前 256KB（DateTimeOriginal + GPS），无第三方依赖
+- **服务端辅助渲染（可选）**: Express 5 + multer + ffmpeg-static，concat slideshow → libx264/aac → MP4
+- **云端存储（可选）**: Supabase（Storage + Postgres + RLS）
+
+`@supabase/supabase-js` / `express` / `ffmpeg-static` / `multer` 都放在 `optionalDependencies`，并在代码中用 `try { await import(...) }` 兜底——不装也能跑前端主流程。
 
 ## 用户流程
 
 ```
-SplashScreen → PermissionPage → HomePage → FilterPage → ReviewPage → StylePage → GeneratePage → SharePage
+HomePage → FilterPage → ReviewPage → StylePage → GeneratePage
+                                                  └→ /share/:shareId（可选公开作品页）
 ```
 
-页面间通过 `localStorage` 传递数据（`filteredMedia`、`selectedStyle`、`textTone`）。
+页面间通过 `ProjectContext`（React Context）传递数据；同时向 `localStorage` 写一份做向后兼容（迁移过渡期）。
 
-## 核心文件结构
+## 核心目录结构
 
 ```
 photo-album-app/
   src/
-    App.jsx                    — 路由定义（8 个页面）
-    main.jsx                   — 入口
-    data/mockData.js           — 模拟数据（照片 URL 来自 copilot-cn.bytedance.net，不支持 CORS）
+    main.jsx                       入口
+    App.jsx                        路由（6 条）
+    context/
+      ProjectContext.jsx           全局状态（filteredMedia / selectedStyle / textBundle / videoBlob …）
+    data/
+      mockData.js                  模拟照片/人物/风格 + filterMedia()
     lib/
-      supabase.js              — Supabase 客户端、上传视频、保存/查询记录
-      renderApi.js             — 辅助渲染 API 地址配置（VITE_RENDER_API_BASE_URL）
+      videoRenderer.js             ★ 核心：Canvas 渲染 + 转场 + 旁白 + MediaRecorder 录制
+      bgm.js                       BGM 加载 + 振荡器兜底
+      dedup.js                     pHash 风格分组去重 + 读取 qualityScore
+      imageQuality.js              真实质量评估（Laplacian variance + 曝光）
+      exifParser.js                JPEG EXIF 解析
+      supabase.js                  云端上传/列表/详情
+      serverRender.js              辅助渲染客户端（含图片压缩）
+      renderApi.js                 辅助渲染 API URL
+      dateUtils.js
     pages/
-      GeneratePage.jsx         — ★ 核心页面：视频生成（~950 行）
-      其他 7 个页面             — UI 交互，无复杂逻辑
-  vite.config.js               — Vite 配置 + 图片代理插件（imageProxyPlugin）
-  server.js                    — Node.js 辅助渲染服务（Express + ffmpeg-static）
-  package.json                 — 依赖管理
+      HomePage.jsx                 入口 + 模板 + 历史作品
+      FilterPage.jsx               导入素材 + 智能/手动筛选 + EXIF + 异步质量评估
+      ReviewPage.jsx               去重 + 质量过滤
+      StylePage.jsx                风格选择
+      GeneratePage.jsx             ★ 视频生成 + 编辑 + 下载/分享
+      SharePage.jsx                公开分享页
+      SplashScreen.jsx / PermissionPage.jsx  历史页面，当前未挂路由
+  public/
+    bgm/{warm,couple,vintage}_1.mp3
+  vite.config.js                   Vite 配置 + 图片代理插件
+  server.js                        辅助渲染 Express 服务
+  supabase/setup.sql               一键建表 + RLS 策略
+  docs/                            PRD + 部署文档
 ```
 
-## GeneratePage.jsx 视频生成流程
+## GeneratePage 视频生成流程
 
-1. **渲染 BGM**: 用 `OfflineAudioContext` 离线渲染合成器音乐（正弦波 + 三角波 + 低通滤波 + 淡入淡出）→ 转为 WAV Blob
-2. **加载图片**: 对外部 URL 通过 `/img-proxy/` 代理下载为 blob URL，避免 canvas 跨域污染（`SecurityError`）
-3. **加载 FFmpeg.wasm**: 从 unpkg CDN 加载 `@ffmpeg/core@0.12.6`（~30MB wasm），用 `toBlobURL` 转为 blob URL
-4. **逐帧渲染**: Canvas 逐帧绘制（Ken Burns 缩放 + 交叉淡入淡出 + 文字叠加），每帧 `toBlob()` 导出 JPEG
-5. **写入帧**: 用 `ffmpeg.writeFile()` 将每帧写入虚拟文件系统，文件名 `f00000.jpg` ~ `f00119.jpg`
-6. **合成视频**: `ffmpeg.exec()` 执行 FFmpeg 命令（注意参数顺序：所有 `-i` 必须在编码参数之前）：
-   ```
-   -framerate 30 -i f%05d.jpg -i bgm.wav -c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p -c:a aac -b:a 128k -shortest output.mp4
-   ```
-7. **读取输出**: `ffmpeg.readFile('output.mp4')` → 类型判断（Uint8Array 或 string）→ 创建 Blob → 设置 video src
+1. **预计算转场参数**：每对相邻照片根据风格 / 语气 / 日期间隔挑选 `crossfade / slideVertical / zoomBlend / fadeToBlack` 之一
+2. **创建 Canvas + 录制流**：720p / 1080p Canvas，`canvas.captureStream(30)` + `new MediaRecorder(stream, { mimeType, videoBitsPerSecond })`
+3. **BGM 注入**：`createMediaStreamDestination()` → `stream.addTrack(audioTrack)`，BGM 音轨进录像流
+4. **加载图片**：先把每张照片 `new Image() + URL → load`，跨域图片走 `/img-proxy/`
+5. **录制阶段**：
+   - 片头 3 秒：黑底 + 标题 + 开场旁白淡入
+   - 主体：每张照片 Ken Burns 缩放 + 转场 + 底部"日期 / 地点 / AI 旁白"覆盖层
+   - 片尾 3 秒：结尾寄语淡入淡出
+   - 每帧 `await requestAnimationFrame`
+6. **结束**：`recorder.stop()` → `Blob(chunks, { type: mimeType })` → `URL.createObjectURL` → `<video src>`
+7. **导出**：本地下载 / Web Share API 分享 / 上传 Supabase 生成公开链接
 
-## 已解决的全部问题
+## 已知问题与待改进
 
-| # | 问题 | 原因 | 解决方案 |
-|---|------|------|----------|
-| 1 | Safari MediaRecorder 空 Blob | Safari 对 `canvas.captureStream()` + `MediaRecorder` 支持不稳定 | 改用 FFmpeg.wasm |
-| 2 | FFmpeg.wasm API 版本不匹配 | 安装了 0.12.x 但代码用了 0.11.x API（`createFFmpeg`/`fetchFile`/`FS`/`run`） | 改为 0.12.x API（`new FFmpeg()`/`load`/`writeFile`/`exec`/`readFile`） |
-| 3 | npm install 装错目录 | 在父目录执行了 npm install | 在 photo-album-app/ 目录下重新安装 |
-| 4 | COEP 头阻止跨域资源 | `Cross-Origin-Embedder-Policy: credentialless` 阻止外部图片加载 | 移除 COOP/COEP 头（单线程 FFmpeg 不需要 SharedArrayBuffer） |
-| 5 | Canvas 跨域污染 SecurityError | 外部图片不支持 CORS，直接加载会污染 canvas，`toBlob()` 抛出 SecurityError | 添加 Vite 图片代理插件 `/img-proxy/` |
-| 6 | FFmpeg 命令行参数顺序错误 | `-i bgm.wav` 放在 `-c:v libx264` 之后，FFmpeg 把 libx264 当成音频解码器，报 `Unknown decoder 'libx264'` | 修正为所有 `-i` 在编码参数之前 |
-| 7 | useEffect 重复触发 | `generateVideo` 引用变化导致 useEffect 反复触发，终止正在运行的 FFmpeg 实例 | 添加 `mountedRef` + `generatingRef` 守卫 |
-| 8 | readFile 返回值类型 | `ffmpeg.readFile()` 可能返回 string 或 Uint8Array | 添加类型判断 |
-
-## 辅助渲染（server.js）
-
-- Express 服务，接收图片文件 + 参数，用 ffmpeg-static 合成视频
-- 仅局域网可用，无法线上部署（需要大量计算资源和临时存储）
-- **当前问题**: 生成的视频无旁白文字、无 BGM，只是图片顺序拼接
+| # | 项 | 说明 |
+|---|---|---|
+| 1 | 移动端兼容 | 微信内置 WebView 无法稳定使用 MediaRecorder；当前仅做 UA 提示，未自动降级到辅助渲染（已记入待办） |
+| 2 | 辅助渲染功能不全 | `server.js` 当前生成的视频没有旁白文字叠加和真实 BGM，只是图片顺序拼接 + 正弦波背景 |
+| 3 | 内存占用 | 大量图片 + 高码率录制时 `chunks` 一直累积，未来可考虑增量写 IndexedDB / OPFS |
+| 4 | mockData 的图片 URL | 使用了字节内部 IDE 接口，外网不一定可达，且不支持 CORS（必须经 `/img-proxy/`） |
 
 ## 环境变量
 
 ```
-VITE_SUPABASE_URL=          — Supabase 项目 URL
-VITE_SUPABASE_ANON_KEY=     — Supabase 匿名密钥
-VITE_SUPABASE_BUCKET=       — 存储桶名（默认 memoirs）
-VITE_SUPABASE_TABLE=        — 数据表名（默认 memoir_projects）
-VITE_PUBLIC_APP_URL=        — 公开访问 URL（用于生成分享链接）
-VITE_RENDER_API_BASE_URL=   — 辅助渲染服务地址（可选）
+VITE_SUPABASE_URL=          Supabase 项目 URL
+VITE_SUPABASE_ANON_KEY=     Supabase 匿名密钥
+VITE_SUPABASE_BUCKET=       存储桶名（默认 memoirs）
+VITE_SUPABASE_TABLE=        数据表名（默认 memoir_projects）
+VITE_PUBLIC_APP_URL=        公开访问 URL（用于生成分享链接）
+VITE_RENDER_API_BASE_URL=   辅助渲染服务地址（可选）
 ```
-
-## 当前已验证的运行状态
-
-- ✅ 桌面 Safari: 视频生成成功（120 帧，928KB MP4，含 BGM）
-- ⏳ 手机 iOS Safari: 待验证（FFmpeg.wasm 性能和稳定性）
-- ⏳ 微信 WebView: 预期不可用（MediaRecorder 不可用，FFmpeg.wasm 也可能受限）
-- ⏳ 辅助渲染 server.js: 缺少旁白和 BGM
-
-## 已知待改进项
-
-1. 手机端 FFmpeg.wasm 性能（~30MB wasm 加载 + 编码速度）
-2. 辅助渲染 server.js 缺少旁白文字叠加和 BGM
-3. 视频帧渲染全部在内存中（大量帧 Blob），照片多时可能内存不足
-4. mockData.js 中的图片 URL 不支持 CORS，必须通过代理加载
-5. FilterPage.jsx 有 HTML 嵌套错误（button 不能嵌套 button）
 
 ## 快速开始
 
@@ -114,6 +121,7 @@ npm run build
 npm run server
 ```
 
-开发服务器启动后：
+开发服务器：
 - 本机访问: `http://localhost:5173/`
-- 局域网访问: `http://<你的电脑IP>:5173/`
+- 局域网访问: `http://<你的 IP>:5173/`
+- 辅助渲染服务: `http://localhost:8787/`（Vite 已配置 `/api`、`/health` 反向代理到 8787）

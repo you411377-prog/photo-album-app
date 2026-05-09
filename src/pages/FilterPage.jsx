@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useProject } from '../context/ProjectContext';
 import { filterMedia } from '../data/mockData';
 import { parseExifFromImageFile } from '../lib/exifParser';
+import { assessImageQuality } from '../lib/imageQuality';
 import { formatYmd, formatHm, formatSeconds } from '../lib/dateUtils';
 import './FilterPage.css';
 
@@ -29,9 +30,11 @@ const FilterPage = () => {
     if (files.length === 0) return;
     const now = Date.now();
     const mapped = [];
+    const qualityJobs = [];
     for (let index = 0; index < files.length; index += 1) {
       const file = files[index];
       const isVideo = file.type.startsWith('video/');
+      const id = now + index;
       const stamp = typeof file.lastModified === 'number' ? file.lastModified : Date.now();
       const importedAt = new Date(stamp).toISOString();
       const url = URL.createObjectURL(file);
@@ -48,9 +51,11 @@ const FilterPage = () => {
         } catch { /* noop */ }
       }
       mapped.push({
-        id: now + index, type: isVideo ? 'video' : 'photo', format: isVideo ? 'video' : 'photo',
-        url, importedAt, album: '导入', favorite: false, tags: [], date, time, location, gps, people: [], personIds: []
+        id, type: isVideo ? 'video' : 'photo', format: isVideo ? 'video' : 'photo',
+        url, importedAt, album: '导入', favorite: false, tags: [], date, time, location, gps, people: [], personIds: [],
+        qualityScore: 0.6
       });
+      if (!isVideo) qualityJobs.push({ id, file });
     }
     const newIds = mapped.map(m => m.id);
     setImportedMedia(prev => [...prev, ...mapped]);
@@ -58,6 +63,14 @@ const FilterPage = () => {
       setManualSelectedIds(prev => [...prev, ...newIds]);
     }
     setManualDate('');
+
+    qualityJobs.forEach(({ id, file }) => {
+      assessImageQuality(file).then((score) => {
+        setImportedMedia(prev => prev.map(item => item.id === id ? { ...item, qualityScore: score } : item));
+      }).catch(() => {
+        // Keep the neutral score if assessment fails.
+      });
+    });
   };
 
   const handleClearImported = () => {
